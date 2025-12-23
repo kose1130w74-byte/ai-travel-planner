@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>AI旅行プランナー（大学生向け）</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 20px; max-width: 900px; }
+    h1 { margin-bottom: 0; }
+    small { color: #666; }
+    label { font-weight: bold; display: block; margin-top: 15px; }
+    input, textarea {
+      width: 100%; padding: 8px; margin-top: 5px; border-radius: 6px;
+      border: 1px solid #ccc; box-sizing: border-box; font-size: 14px;
+    }
+    button {
+      margin-top: 20px; padding: 10px 20px; border: none; border-radius: 6px;
+      font-size: 15px; cursor: pointer; background: #2563eb; color: #fff;
+    }
+    #user-only-output, #plan-output {
+      white-space: pre-wrap; background: #f7f7f7; padding: 15px; border-radius: 8px;
+      margin-top: 10px; font-size: 13px;
+    }
+    #plan-output { background: #eef7ff; }
+  </style>
+</head>
+<body>
+
+<h1>AI旅行プランナー</h1>
+<small>大学生向けの国内旅行プランをAIが自動生成します</small>
+
+<form id="travel-form">
+  <label>出発地</label>
+  <input type="text" id="start" placeholder="例：名古屋" required>
+
+  <label>行きたいエリア（ざっくりでもOK）</label>
+  <input type="text" id="area" placeholder="例：福岡・長崎あたり">
+
+  <label>総予算（一人あたり・円）</label>
+  <input type="number" id="budget" placeholder="例：40000" required>
+
+  <label>日数</label>
+  <input type="number" id="days" placeholder="例：2" required>
+
+  <label>人数</label>
+  <input type="number" id="people" placeholder="例：1" required>
+
+  <label>旅行の目的</label>
+  <input type="text" id="purpose" placeholder="例：屋台でおいしいものを食べたい。太宰府天満宮を見たい。">
+
+  <label>好み・条件（あれば）</label>
+  <textarea id="preference" rows="2" placeholder="例：宿泊費は節約したい。"></textarea>
+
+  <label>行きたくない場所・避けたいこと（あれば）</label>
+  <textarea id="avoid" rows="2" placeholder="例：特になし"></textarea>
+
+  <label>行く時期（ざっくりでOK）</label>
+  <input type="text" id="season" placeholder="例：3月">
+
+  <button type="submit">AIで旅行プランを作る</button>
+</form>
+
+<h2>① ユーザー条件（AIに渡した内容）</h2>
+<div id="user-only-output"></div>
+
+<h2>② 生成された旅行プラン</h2>
+<div id="plan-output">ここにAIからのプランが表示されます</div>
+
+<script>
+  const form = document.getElementById("travel-form");
+  const userOut = document.getElementById("user-only-output");
+  const planOut = document.getElementById("plan-output");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const start = document.getElementById("start").value;
+    const area = document.getElementById("area").value;
+    const budget = document.getElementById("budget").value;
+    const days = document.getElementById("days").value;
+    const people = document.getElementById("people").value;
+    const purpose = document.getElementById("purpose").value || "特になし";
+    const preference = document.getElementById("preference").value || "特になし";
+    const avoid = document.getElementById("avoid").value || "特になし";
+    const season = document.getElementById("season").value || "未指定";
+
+    const userPart =
+`- 出発地：${start}
+- 行きたいエリア（ざっくりでも可）：${area}
+- 総予算（一人あたり、現地で使うお金＋交通費＋宿泊費すべて）：${budget}円
+- 日数：${days}日
+- 人数：${people}人
+- 旅行の目的：${purpose}
+- 好み：${preference}
+- 行きたくない場所・避けたいこと：${avoid}
+- 行く時期：${season}`;
+
+    userOut.textContent = userPart;
+    planOut.textContent = "AIが旅行プランを考えています…";
+
+    try {
+      const res = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userInput: userPart }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        planOut.textContent = "エラー: " + (data.error || "不明なエラー");
+        return;
+      }
+
+      planOut.textContent = data.plan || "プランを取得できませんでした。";
+    } catch (err) {
+      console.error(err);
+      planOut.textContent = "通信エラー：サーバーが起動しているか確認してね。";
+    }
+  });
+</script>
+
+</body>
+</html>
