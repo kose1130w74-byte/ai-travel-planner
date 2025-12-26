@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI旅行プランナー（大学生向け）</title>
   <style>
     body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 20px; max-width: 900px; }
@@ -16,11 +17,13 @@
       margin-top: 20px; padding: 10px 20px; border: none; border-radius: 6px;
       font-size: 15px; cursor: pointer; background: #2563eb; color: #fff;
     }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
     #user-only-output, #plan-output {
       white-space: pre-wrap; background: #f7f7f7; padding: 15px; border-radius: 8px;
       margin-top: 10px; font-size: 13px;
     }
     #plan-output { background: #eef7ff; }
+    .hint { font-size: 12px; color: #666; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -30,13 +33,13 @@
 
 <form id="travel-form">
   <label>出発地</label>
-  <input type="text" id="start" placeholder="例：名古屋" required>
+  <input type="text" id="start" placeholder="例：大阪" required>
 
   <label>行きたいエリア（ざっくりでもOK）</label>
-  <input type="text" id="area" placeholder="例：福岡・長崎あたり">
+  <input type="text" id="area" placeholder="例：京都・奈良">
 
   <label>総予算（一人あたり・円）</label>
-  <input type="number" id="budget" placeholder="例：40000" required>
+  <input type="number" id="budget" placeholder="例：20000" required>
 
   <label>日数</label>
   <input type="number" id="days" placeholder="例：2" required>
@@ -45,22 +48,23 @@
   <input type="number" id="people" placeholder="例：1" required>
 
   <label>旅行の目的</label>
-  <input type="text" id="purpose" placeholder="例：屋台でおいしいものを食べたい。太宰府天満宮を見たい。">
+  <input type="text" id="purpose" placeholder="例：食べ歩き中心。寺社も少し。写真映えも。">
 
   <label>好み・条件（あれば）</label>
-  <textarea id="preference" rows="2" placeholder="例：宿泊費は節約したい。"></textarea>
+  <textarea id="preference" rows="2" placeholder="例：宿泊費は節約、歩くのはOK。夜はゆっくりしたい。"></textarea>
 
   <label>行きたくない場所・避けたいこと（あれば）</label>
-  <textarea id="avoid" rows="2" placeholder="例：特になし"></textarea>
+  <textarea id="avoid" rows="2" placeholder="例：人混みが苦手。移動が長すぎるのは避けたい。"></textarea>
 
   <label>行く時期（ざっくりでOK）</label>
-  <input type="text" id="season" placeholder="例：3月">
+  <input type="text" id="season" placeholder="例：3月（春休み）">
 
-  <button type="submit">AIで旅行プランを作る</button>
+  <button id="submit-btn" type="submit">AIで旅行プランを作る</button>
+  <div class="hint">※ 例文は“入力欄の薄い文字（placeholder）”です。送信しない限り画面に残りません。</div>
 </form>
 
 <h2>① ユーザー条件（AIに渡した内容）</h2>
-<div id="user-only-output"></div>
+<div id="user-only-output">未送信</div>
 
 <h2>② 生成された旅行プラン</h2>
 <div id="plan-output">ここにAIからのプランが表示されます</div>
@@ -69,19 +73,24 @@
   const form = document.getElementById("travel-form");
   const userOut = document.getElementById("user-only-output");
   const planOut = document.getElementById("plan-output");
+  const submitBtn = document.getElementById("submit-btn");
+
+  function val(id) {
+    return document.getElementById(id).value.trim();
+  }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const start = document.getElementById("start").value;
-    const area = document.getElementById("area").value;
-    const budget = document.getElementById("budget").value;
-    const days = document.getElementById("days").value;
-    const people = document.getElementById("people").value;
-    const purpose = document.getElementById("purpose").value || "特になし";
-    const preference = document.getElementById("preference").value || "特になし";
-    const avoid = document.getElementById("avoid").value || "特になし";
-    const season = document.getElementById("season").value || "未指定";
+    const start = val("start");
+    const area = val("area") || "未指定";
+    const budget = val("budget");
+    const days = val("days");
+    const people = val("people");
+    const purpose = val("purpose") || "特になし";
+    const preference = val("preference") || "特になし";
+    const avoid = val("avoid") || "特になし";
+    const season = val("season") || "未指定";
 
     const userPart =
 `- 出発地：${start}
@@ -96,6 +105,7 @@
 
     userOut.textContent = userPart;
     planOut.textContent = "AIが旅行プランを考えています…";
+    submitBtn.disabled = true;
 
     try {
       const res = await fetch("/api/plan", {
@@ -104,16 +114,28 @@
         body: JSON.stringify({ userInput: userPart }),
       });
 
-      const data = await res.json();
+      // まず本文をテキストで受け取って、JSONならJSONにする（エラー時も内容が見える）
+      const raw = await res.text();
+      let data = null;
+      try { data = raw ? JSON.parse(raw) : null; } catch (_) {}
+
       if (!res.ok) {
-        planOut.textContent = "エラー: " + (data.error || "不明なエラー");
+        const msg =
+          (data && (data.error || data.message)) ||
+          raw ||
+          "不明なエラー";
+        planOut.textContent =
+          `エラー（HTTP ${res.status}）: ${msg}\n\n` +
+          `対処ヒント：RenderのLogsで直前のエラー行を確認してね。`;
         return;
       }
 
-      planOut.textContent = data.plan || "プランを取得できませんでした。";
+      planOut.textContent = (data && data.plan) ? data.plan : "プランを取得できませんでした。";
     } catch (err) {
       console.error(err);
-      planOut.textContent = "通信エラー：サーバーが起動しているか確認してね。";
+      planOut.textContent = "通信エラー：ネットワークかサーバー側で落ちている可能性があります。";
+    } finally {
+      submitBtn.disabled = false;
     }
   });
 </script>
